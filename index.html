@@ -1,0 +1,1438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Coat or not — washing line & weather</title>
+  <meta name="description" content="Check if it is safe to hang washing out, and whether you need a coat or umbrella." />
+  <link rel="preconnect" href="https://api.open-meteo.com" />
+  <link rel="preconnect" href="https://geocoding-api.open-meteo.com" />
+  <link rel="preconnect" href="https://api.postcodes.io" />
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a222d;
+      --surface2: #242f3d;
+      --text: #e8eef4;
+      --muted: #8b9caf;
+      --accent: #5eb3f6;
+      --good: #4ade80;
+      --warn: #fbbf24;
+      --bad: #f87171;
+      --radius: 12px;
+      --font: system-ui, "Segoe UI", Roboto, Ubuntu, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--font);
+      background: radial-gradient(ellipse 120% 80% at 50% -20%, #1e3a5f 0%, var(--bg) 55%);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .wrap {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 1.5rem 1.25rem 3rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    header h1 {
+      font-size: clamp(1.5rem, 4vw, 2rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin: 0 0 0.35rem;
+    }
+
+    header p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .search-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .search-wrap {
+      position: relative;
+      flex: 1 1 180px;
+      min-width: 0;
+    }
+
+    .search-row input {
+      width: 100%;
+      min-width: 0;
+      padding: 0.65rem 0.9rem;
+      border-radius: var(--radius);
+      border: 1px solid var(--surface2);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 1rem;
+    }
+
+    .search-row input::placeholder {
+      color: var(--muted);
+    }
+
+    .search-row input:focus {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .suggest-panel {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: calc(100% + 4px);
+      background: var(--surface);
+      border: 1px solid var(--surface2);
+      border-radius: var(--radius);
+      max-height: 240px;
+      overflow-y: auto;
+      z-index: 30;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    }
+
+    .suggest-panel[hidden] {
+      display: none !important;
+    }
+
+    .suggest-item {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 0.55rem 0.85rem;
+      border: none;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      background: transparent;
+      color: var(--text);
+      font-size: 0.9rem;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .suggest-item:last-child {
+      border-bottom: none;
+    }
+
+    .suggest-item:hover,
+    .suggest-item:focus {
+      background: var(--surface2);
+      outline: none;
+    }
+
+    .suggest-item small {
+      color: var(--muted);
+      display: block;
+      font-size: 0.78rem;
+      margin-top: 0.15rem;
+    }
+
+    .quick-locs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .btn-chip {
+      padding: 0.38rem 0.75rem;
+      border-radius: 999px;
+      border: 1px solid var(--surface2);
+      background: var(--surface2);
+      color: var(--text);
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .btn-chip:hover:not(:disabled) {
+      background: #2d3c4f;
+      border-color: #3d4f66;
+    }
+
+    .btn-chip:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .btn {
+      padding: 0.65rem 1rem;
+      border-radius: var(--radius);
+      border: none;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #0a1628;
+    }
+
+    .btn-primary:hover {
+      filter: brightness(1.08);
+    }
+
+    .btn-secondary {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--surface2);
+    }
+
+    .btn-secondary:hover {
+      background: #2d3c4f;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .meta {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 1rem;
+    }
+
+    .meta strong {
+      color: var(--text);
+    }
+
+    .results-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem 0.75rem;
+      margin: 0 0 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .section-toggle-group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.35rem;
+      min-width: 0;
+    }
+
+    .btn-section-toggle {
+      padding: 0.32rem 0.55rem;
+      border-radius: 999px;
+      border: 1px solid var(--surface2);
+      background: var(--surface2);
+      color: var(--text);
+      font-size: 0.72rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      line-height: 1.2;
+    }
+
+    .btn-section-toggle:hover {
+      border-color: #3d4f66;
+      background: #2d3c4f;
+    }
+
+    .btn-section-toggle[aria-pressed="true"] {
+      background: rgba(94, 179, 246, 0.2);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .btn-section-toggle:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .results-toolbar .btn-compact {
+      padding: 0.45rem 0.85rem;
+      font-size: 0.85rem;
+      flex-shrink: 0;
+    }
+
+    .cards {
+      display: grid;
+      gap: 1rem;
+    }
+
+    @media (min-width: 560px) {
+      .cards {
+        grid-template-columns: 1fr 1fr;
+      }
+      .cards .card-wide {
+        grid-column: 1 / -1;
+      }
+    }
+
+    .card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 1rem 1.15rem 1.1rem;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .card-heading {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin: 0 0 0.5rem;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+
+    .verdict {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin: 0 0 0.4rem;
+      line-height: 1.25;
+    }
+
+    .detail {
+      margin: 0;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    .verdict.ok {
+      color: var(--good);
+    }
+
+    .verdict.maybe {
+      color: var(--warn);
+    }
+
+    .verdict.no {
+      color: var(--bad);
+    }
+
+    .hourly {
+      margin-top: 0.75rem;
+      overflow: visible;
+    }
+
+    .hourly-inner {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(4.25rem, 1fr));
+      gap: 0.45rem;
+    }
+
+    @media (min-width: 520px) {
+      .hourly-inner {
+        grid-template-columns: repeat(8, 1fr);
+      }
+    }
+
+    @media (min-width: 680px) {
+      .hourly-inner {
+        grid-template-columns: repeat(12, 1fr);
+      }
+    }
+
+    .hour-pill {
+      background: var(--surface2);
+      border-radius: 8px;
+      padding: 0.45rem 0.35rem;
+      text-align: center;
+      min-width: 0;
+      font-size: 0.72rem;
+    }
+
+    .hour-pill .t {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .hour-pill .p {
+      color: var(--muted);
+    }
+
+    .hour-pill.wet {
+      outline: 1px solid rgba(248, 113, 113, 0.5);
+    }
+
+    .err {
+      background: rgba(248, 113, 113, 0.12);
+      border: 1px solid rgba(248, 113, 113, 0.35);
+      color: #fecaca;
+      padding: 0.9rem 1rem;
+      border-radius: var(--radius);
+      font-size: 0.9rem;
+    }
+
+    .loading {
+      color: var(--muted);
+      text-align: center;
+      padding: 2rem;
+    }
+
+    footer {
+      margin-top: 2rem;
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    footer a {
+      color: var(--accent);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Coat or not</h1>
+      <p>Washing line safety, coat, and umbrella — from your forecast</p>
+    </header>
+
+    <div class="search-row">
+      <div class="search-wrap">
+        <input
+          type="search"
+          id="place"
+          placeholder="Place name or UK postcode (e.g. York, SW1A 1AA)"
+          autocomplete="off"
+          aria-label="Search by place name or UK postcode"
+          aria-controls="suggestions"
+          aria-autocomplete="list"
+        />
+        <div id="suggestions" class="suggest-panel" hidden role="listbox" aria-label="Place and postcode suggestions"></div>
+      </div>
+      <button type="button" class="btn btn-primary" id="btnSearch">Search</button>
+      <button type="button" class="btn btn-secondary" id="btnGeo">My location</button>
+    </div>
+
+    <div class="quick-locs" aria-label="Quick cities">
+      <button type="button" class="btn-chip" data-quick-loc data-geocode="Sheffield, United Kingdom">Sheffield</button>
+      <button type="button" class="btn-chip" data-quick-loc data-geocode="Barnsley, United Kingdom">Barnsley</button>
+      <button type="button" class="btn-chip" data-quick-loc data-geocode="Manchester, United Kingdom">Manchester</button>
+      <button type="button" class="btn-chip" data-quick-loc data-geocode="York, United Kingdom">York</button>
+      <button type="button" class="btn-chip" data-quick-loc data-geocode="Liverpool, United Kingdom">Liverpool</button>
+      <button type="button" class="btn-chip" data-quick-loc data-geocode="Newcastle upon Tyne, United Kingdom">Newcastle</button>
+      <button type="button" class="btn-chip" data-quick-loc data-geocode="London, United Kingdom">London</button>
+      <button type="button" class="btn-chip" data-quick-loc data-geocode="Edinburgh, United Kingdom">Edinburgh</button>
+    </div>
+
+    <div id="status" class="meta" hidden></div>
+    <div id="error" class="err" hidden></div>
+    <div id="results" hidden>
+      <div class="meta" id="locationLine"></div>
+      <div class="results-toolbar">
+        <div class="section-toggle-group" role="group" aria-label="Show or hide sections">
+          <button type="button" class="btn-section-toggle" data-section-card="sectionCardWash" aria-pressed="false" title="Washing line">Washing</button>
+          <button type="button" class="btn-section-toggle" data-section-card="sectionCardCoat" aria-pressed="false" title="Coat or shorts">Coat</button>
+          <button type="button" class="btn-section-toggle" data-section-card="sectionCardBrolly" aria-pressed="false" title="Umbrella">Brolly</button>
+          <button type="button" class="btn-section-toggle" data-section-card="sectionCardDry" aria-pressed="false" title="Next good drying spell">Drying</button>
+          <button type="button" class="btn-section-toggle" data-section-card="sectionCardShorts" aria-pressed="false" title="Next shorts-friendly spell">Shorts</button>
+          <button type="button" class="btn-section-toggle" data-section-card="sectionCardWalk" aria-pressed="false" title="Best evening for a night walk">Walk</button>
+          <button type="button" class="btn-section-toggle" data-section-card="sectionCardWind" aria-pressed="false" title="Calmest day for wind">Calm</button>
+        </div>
+        <button type="button" class="btn btn-secondary btn-compact" id="toggleAllCardsBtn">Show all</button>
+      </div>
+      <div class="cards">
+        <div class="card card-wide" id="sectionCardWash" hidden>
+          <h2 class="card-heading"><span id="washCardTitle">Washing line</span></h2>
+          <p class="verdict" id="washVerdict"></p>
+          <p class="detail" id="washDetail"></p>
+          <div class="hourly" id="washHourly" hidden></div>
+        </div>
+        <div class="card" id="sectionCardCoat" hidden>
+          <h2 class="card-heading">Coat or shorts</h2>
+          <p class="verdict" id="coatVerdict"></p>
+          <p class="detail" id="coatDetail"></p>
+        </div>
+        <div class="card" id="sectionCardBrolly" hidden>
+          <h2 class="card-heading">Umbrella</h2>
+          <p class="verdict" id="brollyVerdict"></p>
+          <p class="detail" id="brollyDetail"></p>
+        </div>
+        <div class="card card-wide" id="sectionCardDry" hidden>
+          <h2 class="card-heading">Next good drying spell</h2>
+          <p class="verdict" id="nextDryVerdict"></p>
+          <p class="detail" id="nextDryDetail"></p>
+        </div>
+        <div class="card card-wide" id="sectionCardShorts" hidden>
+          <h2 class="card-heading">Next shorts-friendly spell</h2>
+          <p class="verdict" id="nextShortsVerdictEl"></p>
+          <p class="detail" id="nextShortsDetail"></p>
+        </div>
+        <div class="card card-wide" id="sectionCardWalk" hidden>
+          <h2 class="card-heading">Best evening for a night walk</h2>
+          <p class="verdict" id="nightWalkVerdictEl"></p>
+          <p class="detail" id="nightWalkDetail"></p>
+        </div>
+        <div class="card card-wide" id="sectionCardWind" hidden>
+          <h2 class="card-heading">Calmest day for wind</h2>
+          <p class="verdict" id="calmWindVerdictEl"></p>
+          <p class="detail" id="calmWindDetail"></p>
+        </div>
+      </div>
+    </div>
+    <div id="loading" class="loading" hidden>Loading forecast…</div>
+
+    <footer>
+      Weather data from <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a>.
+      UK postcodes from <a href="https://postcodes.io" target="_blank" rel="noopener">Postcodes.io</a> (OS / ONS data).
+      Washing line and “next good drying spell” share one rule; “next shorts-friendly spell” matches the coat card (feels-like above 14 °C). “Best evening for a night walk” uses 21:00–23:00 local hours above 15 °C feels-like; if none qualify, it picks the next-best evening (warmer lows, then lighter wind at 10 m). “Calmest day for wind” picks the calendar day with the lowest average 10 m wind in the outlook (then lowest peak).
+    </footer>
+  </div>
+
+  <script>
+    const DRY_HOURS = 24;
+    const BROLLY_HOURS = 6;
+    const COAT_BELOW_C = 9;
+    const SHORTS_ABOVE_C = 14;
+    /** Enough days to hunt for the next full dry window (Open-Meteo allows up to 16). */
+    const USER_FORECAST_DAYS = "14";
+    /** Night walk: local clock hours (forecast timezone) from 21:00 through 23:00 inclusive. */
+    const NIGHT_WALK_HOUR_START = 21;
+    const NIGHT_WALK_HOUR_END = 23;
+    /** Every hour in that window must be strictly above this feels-like (°C). */
+    const NIGHT_WALK_FEEL_ABOVE_C = 15;
+
+    const byId = (id) => document.getElementById(id);
+
+    const washTitleEl = byId("washCardTitle");
+    if (washTitleEl) washTitleEl.textContent = "Washing line (next " + DRY_HOURS + " hours)";
+
+    const SECTION_CARD_IDS = [
+      "sectionCardWash",
+      "sectionCardCoat",
+      "sectionCardBrolly",
+      "sectionCardDry",
+      "sectionCardShorts",
+      "sectionCardWalk",
+      "sectionCardWind",
+    ];
+
+    function allSectionCardsVisible() {
+      return SECTION_CARD_IDS.every((id) => {
+        const el = byId(id);
+        return el && !el.hidden;
+      });
+    }
+
+    function syncToggleAllCardsBtn() {
+      const tbtn = byId("toggleAllCardsBtn");
+      if (!tbtn) return;
+      tbtn.textContent = allSectionCardsVisible() ? "Hide all" : "Show all";
+    }
+
+    function syncSectionToggleButtons() {
+      document.querySelectorAll(".btn-section-toggle[data-section-card]").forEach((btn) => {
+        const card = byId(btn.getAttribute("data-section-card"));
+        if (!card) return;
+        btn.setAttribute("aria-pressed", !card.hidden ? "true" : "false");
+      });
+    }
+
+    function syncResultsToolbar() {
+      syncToggleAllCardsBtn();
+      syncSectionToggleButtons();
+    }
+
+    function setSectionCardVisible(cardId, visible, skipSync) {
+      const card = byId(cardId);
+      if (!card) return;
+      card.hidden = !visible;
+      if (!skipSync) syncResultsToolbar();
+    }
+
+    function showDefaultSectionCards() {
+      SECTION_CARD_IDS.forEach((id) => {
+        const c = byId(id);
+        if (c) c.hidden = true;
+      });
+      setSectionCardVisible("sectionCardWash", true, true);
+      syncResultsToolbar();
+    }
+
+    function setAllSectionCardsVisible(visible) {
+      SECTION_CARD_IDS.forEach((id) => {
+        const c = byId(id);
+        if (c) c.hidden = !visible;
+      });
+      syncResultsToolbar();
+    }
+
+    byId("toggleAllCardsBtn").addEventListener("click", () => {
+      setAllSectionCardsVisible(!allSectionCardsVisible());
+    });
+
+    document.querySelector(".results-toolbar").addEventListener("click", (e) => {
+      const sec = e.target.closest(".btn-section-toggle");
+      if (!sec || !e.currentTarget.contains(sec)) return;
+      const cid = sec.getAttribute("data-section-card");
+      const card = cid ? byId(cid) : null;
+      if (!card) return;
+      setSectionCardVisible(cid, card.hidden, false);
+    });
+
+    function showError(msg) {
+      const el = byId("error");
+      el.textContent = msg;
+      el.hidden = !msg;
+    }
+
+    function setLoading(on) {
+      byId("loading").hidden = !on;
+      byId("btnSearch").disabled = on;
+      byId("btnGeo").disabled = on;
+      document.querySelectorAll("[data-quick-loc]").forEach((b) => {
+        b.disabled = on;
+      });
+    }
+
+    /** Looks like a UK outward code or full postcode (not a place name). */
+    function isUkPostcodeStyleQuery(q) {
+      const c = q.trim().replace(/\s+/g, "").toUpperCase();
+      return c.length >= 2 && c.length <= 10 && /^[A-Z]{1,2}\d/.test(c);
+    }
+
+    /** Only try postcode.io lookup when the string is postcode-shaped (avoids useless API calls). */
+    function couldBeUkPostcodeForLookup(q) {
+      const t = q.trim();
+      if (t.length < 5 || t.length > 12) return false;
+      return isUkPostcodeStyleQuery(t);
+    }
+
+    async function lookupUkPostcode(postcode) {
+      const path = encodeURIComponent(postcode.trim());
+      const r = await fetch("https://api.postcodes.io/postcodes/" + path);
+      if (r.status === 404) return null;
+      if (!r.ok) return null;
+      const data = await r.json();
+      const res = data.result;
+      if (!res || typeof res.latitude !== "number" || typeof res.longitude !== "number") return null;
+      const admin = [res.postcode, res.admin_district, res.region].filter(Boolean);
+      const label = admin.slice(0, 3).join(", ");
+      return { lat: res.latitude, lon: res.longitude, label: label || res.postcode };
+    }
+
+    async function fetchUkPostcodeAutocomplete(partial) {
+      const p = partial.trim();
+      if (p.length < 2) return [];
+      const path = encodeURIComponent(p);
+      const r = await fetch(
+        "https://api.postcodes.io/postcodes/" + path + "/autocomplete?limit=8"
+      );
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data.result) ? data.result : [];
+    }
+
+    async function geocode(name) {
+      const t = name.trim();
+      if (couldBeUkPostcodeForLookup(t)) {
+        const pc = await lookupUkPostcode(t);
+        if (pc) return pc;
+        throw new Error("That UK postcode was not recognised. Check the code or try a nearby place name.");
+      }
+      const url =
+        "https://geocoding-api.open-meteo.com/v1/search?name=" +
+        encodeURIComponent(t) +
+        "&count=5&language=en&format=json";
+      const r = await fetch(url);
+      if (!r.ok) throw new Error("Could not look up that place.");
+      const data = await r.json();
+      if (!data.results?.length) throw new Error("No results for that search. Try a nearby town or UK postcode.");
+      const p = data.results[0];
+      return {
+        lat: p.latitude,
+        lon: p.longitude,
+        label: [p.name, p.admin1, p.country_code].filter(Boolean).join(", "),
+      };
+    }
+
+    async function fetchGeocodeSuggestions(q) {
+      const t = q.trim();
+      if (t.length < 2) return [];
+      const url =
+        "https://geocoding-api.open-meteo.com/v1/search?name=" +
+        encodeURIComponent(t) +
+        "&count=8&language=en&format=json";
+      const r = await fetch(url);
+      if (!r.ok) return [];
+      const data = await r.json();
+      return data.results || [];
+    }
+
+    function hideSuggestions() {
+      const panel = byId("suggestions");
+      panel.hidden = true;
+      panel.innerHTML = "";
+    }
+
+    function renderSuggestionList(omResults, postcodeStrings) {
+      const panel = byId("suggestions");
+      const placeInputEl = byId("place");
+      panel.innerHTML = "";
+      const pcList = postcodeStrings || [];
+      const om = omResults || [];
+      if (!pcList.length && !om.length) {
+        panel.hidden = true;
+        return;
+      }
+      pcList.forEach((pc) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "suggest-item";
+        btn.setAttribute("role", "option");
+        btn.innerHTML = "<span>" + pc + "</span><small>UK postcode</small>";
+        btn.addEventListener("click", async () => {
+          hideSuggestions();
+          placeInputEl.value = pc;
+          const loc = await lookupUkPostcode(pc);
+          if (!loc) {
+            showError("Could not resolve that postcode.");
+            return;
+          }
+          loadForLatLon(loc.lat, loc.lon, loc.label);
+        });
+        panel.appendChild(btn);
+      });
+      om.forEach((p) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "suggest-item";
+        btn.setAttribute("role", "option");
+        const line1 = [p.name, p.admin1].filter(Boolean).join(", ");
+        const bits = [p.country || p.country_code, p.feature_code].filter(Boolean);
+        btn.innerHTML =
+          "<span>" +
+          line1 +
+          "</span><small>" +
+          bits.join(" · ") +
+          "</small>";
+        btn.addEventListener("click", () => {
+          hideSuggestions();
+          placeInputEl.value = line1;
+          const label = [p.name, p.admin1, p.country_code].filter(Boolean).join(", ");
+          loadForLatLon(p.latitude, p.longitude, label);
+        });
+        panel.appendChild(btn);
+      });
+      panel.hidden = false;
+    }
+
+    async function fetchForecast(lat, lon) {
+      const params = new URLSearchParams({
+        latitude: String(lat),
+        longitude: String(lon),
+        hourly:
+          "precipitation_probability,precipitation,temperature_2m,apparent_temperature,weathercode,wind_speed_10m",
+        forecast_days: USER_FORECAST_DAYS,
+        timezone: "auto",
+      });
+      const r = await fetch("https://api.open-meteo.com/v1/forecast?" + params);
+      if (!r.ok) throw new Error("Forecast request failed.");
+      return r.json();
+    }
+
+    /** Open-Meteo hourly ISO times are in the location timezone; offset is signed UTC−local in seconds. */
+    function localForecastTimeToDate(iso, utcOffsetSeconds) {
+      const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+      if (!m) return new Date(NaN);
+      const Y = Number(m[1]);
+      const Mo = Number(m[2]);
+      const D = Number(m[3]);
+      const h = Number(m[4]);
+      const min = Number(m[5]);
+      const ms = Date.UTC(Y, Mo - 1, D, h, min, 0);
+      return new Date(ms - utcOffsetSeconds * 1000);
+    }
+
+    function parseHourly(json) {
+      const offset = json.utc_offset_seconds ?? 0;
+      const h = json.hourly;
+      if (!h?.time?.length) return [];
+      const times = h.time;
+      const now = Date.now();
+      const out = [];
+      for (let i = 0; i < times.length; i++) {
+        const t = localForecastTimeToDate(times[i], offset);
+        if (t.getTime() < now) continue;
+        const w = h.wind_speed_10m?.[i];
+        out.push({
+          time: t,
+          pop: h.precipitation_probability[i] ?? 0,
+          precipMm: h.precipitation[i] ?? 0,
+          temp: h.temperature_2m[i],
+          apparent: h.apparent_temperature[i],
+          code: h.weathercode[i],
+          windKmh: typeof w === "number" && !Number.isNaN(w) ? w : null,
+        });
+      }
+      return out;
+    }
+
+    function fmtClock(d, timeZone) {
+      if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "\u2014";
+      const o = { hour: "2-digit", minute: "2-digit" };
+      if (timeZone) o.timeZone = timeZone;
+      return d.toLocaleTimeString([], o);
+    }
+
+    function fmtDateLong(d, timeZone) {
+      if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "\u2014";
+      const o = { weekday: "long", day: "numeric", month: "long" };
+      if (timeZone) o.timeZone = timeZone;
+      return d.toLocaleDateString(undefined, o);
+    }
+
+    function forecastTimeZoneOrLocal(timeZone) {
+      return timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+    }
+
+    function localHourInTz(d, timeZone) {
+      if (!(d instanceof Date) || Number.isNaN(d.getTime())) return NaN;
+      const tz = forecastTimeZoneOrLocal(timeZone);
+      const parts = new Intl.DateTimeFormat("en-GB", {
+        timeZone: tz,
+        hour: "numeric",
+        hour12: false,
+      }).formatToParts(d);
+      const hp = parts.find((p) => p.type === "hour");
+      return hp ? parseInt(hp.value, 10) : NaN;
+    }
+
+    function localDateKeyInTz(d, timeZone) {
+      if (!(d instanceof Date) || Number.isNaN(d.getTime())) return "";
+      const tz = forecastTimeZoneOrLocal(timeZone);
+      const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: tz,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).formatToParts(d);
+      const y = parts.find((p) => p.type === "year")?.value;
+      const mo = parts.find((p) => p.type === "month")?.value;
+      const da = parts.find((p) => p.type === "day")?.value;
+      return y && mo && da ? y + "-" + mo + "-" + da : "";
+    }
+
+    function isDryWindowSlice(slice) {
+      if (slice.length < DRY_HOURS) return false;
+      const totalRain = slice.reduce((s, x) => s + x.precipMm, 0);
+      return slice.every((x) => x.pop === 0) && totalRain < 0.05;
+    }
+
+    function findFirstDryWindow(hours) {
+      for (let i = 0; i <= hours.length - DRY_HOURS; i++) {
+        const slice = hours.slice(i, i + DRY_HOURS);
+        if (isDryWindowSlice(slice)) return { startIndex: i, slice };
+      }
+      return null;
+    }
+
+    function feelC(h) {
+      const n = h.apparent ?? h.temp;
+      return typeof n === "number" && !Number.isNaN(n) ? n : null;
+    }
+
+    function isShortsWindowSlice(slice) {
+      if (slice.length < BROLLY_HOURS) return false;
+      for (let i = 0; i < slice.length; i++) {
+        const f = feelC(slice[i]);
+        if (f == null || f <= SHORTS_ABOVE_C) return false;
+      }
+      return true;
+    }
+
+    function findFirstShortsWindow(hours) {
+      for (let i = 0; i <= hours.length - BROLLY_HOURS; i++) {
+        const slice = hours.slice(i, i + BROLLY_HOURS);
+        if (isShortsWindowSlice(slice)) return { startIndex: i, slice };
+      }
+      return null;
+    }
+
+    function nextShortsVerdictBlock(hours, timeZone, shortsOkNow) {
+      if (shortsOkNow) {
+        return {
+          cls: "ok",
+          title: "You are in a shorts-friendly spell now",
+          detail:
+            "Feels-like stays above " +
+            SHORTS_ABOVE_C +
+            "°C for every hour in the next " +
+            BROLLY_HOURS +
+            " hours — the same check as the coat card.",
+        };
+      }
+      const found = findFirstShortsWindow(hours);
+      if (!found) {
+        return {
+          cls: "maybe",
+          title: "Nothing in this forecast",
+          detail:
+            "No " +
+            BROLLY_HOURS +
+            "-hour block where each hour stays above " +
+            SHORTS_ABOVE_C +
+            "°C shows up in the next " +
+            USER_FORECAST_DAYS +
+            " days.",
+        };
+      }
+      const start = found.slice[0].time;
+      const day = fmtDateLong(start, timeZone);
+      const clock = fmtClock(start, timeZone);
+      return {
+        cls: "ok",
+        title: day,
+        detail:
+          "Next window starts about " +
+          clock +
+          " (" +
+          BROLLY_HOURS +
+          " straight hours in the model, all above " +
+          SHORTS_ABOVE_C +
+          "°C feels-like).",
+      };
+    }
+
+    function nightWalkVerdictBlock(hours, timeZone) {
+      const tz = forecastTimeZoneOrLocal(timeZone);
+      const byDate = new Map();
+      for (let i = 0; i < hours.length; i++) {
+        const x = hours[i];
+        const lh = localHourInTz(x.time, tz);
+        if (
+          !Number.isFinite(lh) ||
+          lh < NIGHT_WALK_HOUR_START ||
+          lh > NIGHT_WALK_HOUR_END
+        ) {
+          continue;
+        }
+        const key = localDateKeyInTz(x.time, tz);
+        if (!key) continue;
+        const f = feelC(x);
+        if (f == null) continue;
+        if (!byDate.has(key)) byDate.set(key, []);
+        byDate.get(key).push({
+          time: x.time,
+          h: lh,
+          f,
+          w: x.windKmh,
+        });
+      }
+      const scored = [];
+      for (const [dateKey, arr] of byDate) {
+        const minF = Math.min(...arr.map((o) => o.f));
+        const maxF = Math.max(...arr.map((o) => o.f));
+        const winds = arr.map((o) => o.w).filter((n) => typeof n === "number" && !Number.isNaN(n));
+        const maxWind = winds.length ? Math.max(...winds) : null;
+        const avgWind = winds.length ? winds.reduce((s, n) => s + n, 0) / winds.length : null;
+        const allAbove = arr.every((o) => o.f > NIGHT_WALK_FEEL_ABOVE_C);
+        scored.push({ dateKey, arr, minF, maxF, maxWind, avgWind, allAbove });
+      }
+      if (!scored.length) {
+        return {
+          cls: "maybe",
+          title: "No evening slots in the model",
+          detail:
+            "There are no hourly steps between " +
+            NIGHT_WALK_HOUR_START +
+            ":00 and " +
+            NIGHT_WALK_HOUR_END +
+            ":00 in this run. Try again after the forecast updates.",
+        };
+      }
+      function compareNightWalkEvening(a, b) {
+        if (b.minF !== a.minF) return b.minF - a.minF;
+        const aw = a.maxWind;
+        const bw = b.maxWind;
+        if (aw != null && bw != null && aw !== bw) return aw - bw;
+        if (aw == null && bw != null) return 1;
+        if (aw != null && bw == null) return -1;
+        const aa = a.avgWind;
+        const ba = b.avgWind;
+        if (aa != null && ba != null && aa !== ba) return aa - ba;
+        return a.dateKey.localeCompare(b.dateKey);
+      }
+
+      const ok = scored.filter((s) => s.allAbove);
+      if (!ok.length) {
+        scored.sort(compareNightWalkEvening);
+        const pick = scored[0];
+        const nowKey = localDateKeyInTz(new Date(), tz);
+        const isTonight = pick.dateKey === nowKey;
+        const title = isTonight
+          ? "Next best: tonight"
+          : "Next best: " + fmtDateLong(pick.arr[0].time, tz);
+        const windBit =
+          pick.maxWind != null
+            ? " Peak wind about " +
+              Math.round(pick.maxWind) +
+              " km/h in that window" +
+              (pick.avgWind != null
+                ? " (average " + Math.round(pick.avgWind) + " km/h)."
+                : ".")
+            : " Wind data missing for part of the run.";
+        const detail =
+          "No evening keeps every hour from " +
+          NIGHT_WALK_HOUR_START +
+          ":00–" +
+          NIGHT_WALK_HOUR_END +
+          ":00 above " +
+          NIGHT_WALK_FEEL_ABOVE_C +
+          "°C feels-like. Best compromise in this forecast: " +
+          (isTonight ? "this evening" : fmtDateLong(pick.arr[0].time, tz)) +
+          ", roughly " +
+          Math.round(pick.minF) +
+          "–" +
+          Math.round(pick.maxF) +
+          "°C feels-like." +
+          windBit +
+          " (Ranked by mildest low, then lighter wind.)";
+        return { cls: "maybe", title, detail };
+      }
+      ok.sort(compareNightWalkEvening);
+      const best = ok[0];
+      const nowKey = localDateKeyInTz(new Date(), tz);
+      const isTonight = best.dateKey === nowKey;
+      const title = isTonight ? "Tonight" : fmtDateLong(best.arr[0].time, tz);
+      const detail =
+        (isTonight ? "This evening, " : "") +
+        "from " +
+        NIGHT_WALK_HOUR_START +
+        ":00 through " +
+        NIGHT_WALK_HOUR_END +
+        ":00 local time, every forecast hour is above " +
+        NIGHT_WALK_FEEL_ABOVE_C +
+        "°C feels-like (roughly " +
+        Math.round(best.minF) +
+        "–" +
+        Math.round(best.maxF) +
+        "°C in that band). Best match in this " +
+        USER_FORECAST_DAYS +
+        "-day outlook.";
+      return { cls: "ok", title, detail };
+    }
+
+    function calmWindDayVerdict(hours, timeZone) {
+      const tz = forecastTimeZoneOrLocal(timeZone);
+      const byDate = new Map();
+      for (let i = 0; i < hours.length; i++) {
+        const x = hours[i];
+        const w = x.windKmh;
+        if (w == null || Number.isNaN(w)) continue;
+        const key = localDateKeyInTz(x.time, tz);
+        if (!key) continue;
+        if (!byDate.has(key)) byDate.set(key, []);
+        byDate.get(key).push(w);
+      }
+      const days = [];
+      for (const [dateKey, winds] of byDate) {
+        if (!winds.length) continue;
+        const avg = winds.reduce((s, n) => s + n, 0) / winds.length;
+        const maxW = Math.max(...winds);
+        days.push({ dateKey, avg, maxW });
+      }
+      if (!days.length) {
+        return {
+          cls: "maybe",
+          title: "No wind data",
+          detail: "The hourly run does not include 10 m wind for this period, so we cannot rank days.",
+        };
+      }
+      days.sort((a, b) => {
+        if (a.avg !== b.avg) return a.avg - b.avg;
+        if (a.maxW !== b.maxW) return a.maxW - b.maxW;
+        return a.dateKey.localeCompare(b.dateKey);
+      });
+      const best = days[0];
+      const sample = hours.find((h) => {
+        if (localDateKeyInTz(h.time, tz) !== best.dateKey) return false;
+        const ww = h.windKmh;
+        return typeof ww === "number" && !Number.isNaN(ww);
+      });
+      const nowKey = localDateKeyInTz(new Date(), tz);
+      const isToday = best.dateKey === nowKey;
+      const title = isToday
+        ? "Today"
+        : sample
+          ? fmtDateLong(sample.time, tz)
+          : best.dateKey;
+      const detail =
+        (isToday ? "Today has " : "That day has ") +
+        "the lowest mean wind in this forecast: about " +
+        Math.round(best.avg) +
+        " km/h on average at 10 m (peak near " +
+        Math.round(best.maxW) +
+        " km/h). Compared across " +
+        days.length +
+        " day(s) with data in the " +
+        USER_FORECAST_DAYS +
+        "-day outlook.";
+      return { cls: "ok", title, detail };
+    }
+
+    function nextDryVerdict(hours, timeZone, washOkNow) {
+      if (washOkNow) {
+        return {
+          cls: "ok",
+          title: "Today — you are already in a dry spell",
+          detail:
+            "The model keeps 0% hourly rain and almost no precipitation for the next " +
+            DRY_HOURS +
+            " hours from now. Good time to use the line.",
+        };
+      }
+      const found = findFirstDryWindow(hours);
+      if (!found) {
+        return {
+          cls: "maybe",
+          title: "Nothing clear in this forecast",
+          detail:
+            "No " +
+            DRY_HOURS +
+            "-hour stretch of completely dry hours shows up in the next " +
+            USER_FORECAST_DAYS +
+            " days. The outlook may improve as forecasts update.",
+        };
+      }
+      const start = found.slice[0].time;
+      const day = fmtDateLong(start, timeZone);
+      const clock = fmtClock(start, timeZone);
+      return {
+        cls: "ok",
+        title: day,
+        detail: `Next solid window starts about ${clock} (${DRY_HOURS} hours in a row at 0% rain in the model). Aim to hang washing from then.`,
+      };
+    }
+
+    function washingVerdict(hours, timeZone) {
+      const slice = hours.slice(0, DRY_HOURS);
+      if (slice.length < DRY_HOURS) {
+        return {
+          cls: "maybe",
+          title: "Not enough data",
+          detail:
+            "Forecast does not cover the full " +
+            DRY_HOURS +
+            "-hour window yet (or data is incomplete).",
+        };
+      }
+      const maxPop = Math.max(...slice.map((x) => x.pop));
+      const totalRain = slice.reduce((s, x) => s + x.precipMm, 0);
+      if (isDryWindowSlice(slice)) {
+        return {
+          cls: "ok",
+          title: "Yes — line is fine",
+          detail:
+            "Rain chance is 0% every hour for the next " +
+            DRY_HOURS +
+            " hours (and no meaningful precipitation in the model).",
+          slice,
+        };
+      }
+      const worst = slice.reduce((a, b) => (b.pop > a.pop ? b : a));
+      return {
+        cls: "no",
+        title: "Wait — rain is possible",
+        detail:
+          "At least one hour shows rain risk (max " +
+          maxPop +
+          "%). Peak concern around " +
+          fmtClock(worst.time, timeZone) +
+          ".",
+        slice,
+      };
+    }
+
+    function coatVerdict(hours) {
+      const slice = hours.slice(0, BROLLY_HOURS);
+      if (!slice.length) {
+        return { cls: "maybe", title: "—", detail: "No hourly data." };
+      }
+      const feels = slice
+        .map((x) => x.apparent ?? x.temp)
+        .filter((n) => typeof n === "number" && !Number.isNaN(n));
+      if (!feels.length) {
+        return { cls: "maybe", title: "—", detail: "No temperature data in the forecast." };
+      }
+      const avgFeel = feels.reduce((s, n) => s + n, 0) / feels.length;
+      const minFeel = Math.min(...feels);
+      const maxFeel = Math.max(...feels);
+      if (minFeel < COAT_BELOW_C) {
+        return {
+          cls: "no",
+          title: "Coat",
+          detail:
+            "Feels-like dips below " +
+            COAT_BELOW_C +
+            "°C (down to about " +
+            Math.round(minFeel) +
+            "°C in the next few hours). A coat is the better call.",
+        };
+      }
+      if (minFeel > SHORTS_ABOVE_C) {
+        return {
+          cls: "ok",
+          title: "Shorts weather",
+          detail:
+            "Stays above " +
+            SHORTS_ABOVE_C +
+            "°C the whole time (low about " +
+            Math.round(minFeel) +
+            "°C, typical " +
+            Math.round(avgFeel) +
+            "°C). Shorts are reasonable if it suits you.",
+        };
+      }
+      return {
+        cls: "maybe",
+        title: "In between",
+        detail:
+          "Feels-like ranges about " +
+          Math.round(minFeel) +
+          "–" +
+          Math.round(maxFeel) +
+          "°C (coat if under " +
+          COAT_BELOW_C +
+          "°C, shorts only if it stayed above " +
+          SHORTS_ABOVE_C +
+          "°C the whole time). Jeans and a light layer usually fit this band.",
+      };
+    }
+
+    function brollyVerdict(hours) {
+      const slice = hours.slice(0, BROLLY_HOURS);
+      if (!slice.length) {
+        return { cls: "maybe", title: "—", detail: "No hourly data." };
+      }
+      const maxPop = Math.max(...slice.map((x) => x.pop));
+      const sumRain = slice.reduce((s, x) => s + x.precipMm, 0);
+      const heavy = slice.some((x) => x.precipMm >= 0.5);
+      if (maxPop >= 50 || heavy || sumRain >= 1) {
+        return {
+          cls: "no",
+          title: "Take an umbrella",
+          detail: `Rain risk peaks at about ${maxPop}% in the window, or measurable rain is forecast. Safer with a brolly.`,
+        };
+      }
+      if (maxPop >= 25) {
+        return {
+          cls: "maybe",
+          title: "Worth packing",
+          detail: `Some rain chance (up to ${maxPop}%). A compact umbrella is a small hedge.`,
+        };
+      }
+      return {
+        cls: "ok",
+        title: "Probably fine without",
+        detail:
+          "Low rain probability in the next " +
+          BROLLY_HOURS +
+          " hours (max about " +
+          maxPop +
+          "%).",
+      };
+    }
+
+    function renderHourly(container, slice, timeZone) {
+      if (!slice?.length) {
+        container.hidden = true;
+        container.innerHTML = "";
+        return;
+      }
+      container.hidden = false;
+      const inner = document.createElement("div");
+      inner.className = "hourly-inner";
+      slice.forEach((x) => {
+        const pill = document.createElement("div");
+        pill.className = "hour-pill" + (x.pop > 0 ? " wet" : "");
+        pill.innerHTML =
+          '<div class="t">' +
+          fmtClock(x.time, timeZone) +
+          "</div>" +
+          '<div class="p">' +
+          Math.round(x.pop) +
+          "% · " +
+          (x.temp != null ? Math.round(x.temp) + "°" : "") +
+          "</div>";
+        inner.appendChild(pill);
+      });
+      container.innerHTML = "";
+      container.appendChild(inner);
+    }
+
+    function applyVerdict(elTitle, elDetail, v) {
+      elTitle.textContent = v.title;
+      elTitle.className = "verdict " + v.cls;
+      elDetail.textContent = v.detail;
+    }
+
+    async function loadForLatLon(lat, lon, label) {
+      showError("");
+      setLoading(true);
+      byId("results").hidden = true;
+      byId("status").hidden = true;
+      try {
+        const json = await fetchForecast(lat, lon);
+        const forecastTz = json.timezone || "";
+        const hours = parseHourly(json);
+        const wash = washingVerdict(hours, forecastTz || undefined);
+        const coat = coatVerdict(hours);
+        const brolly = brollyVerdict(hours);
+        const washOkNow = wash.cls === "ok";
+        const nextDry = nextDryVerdict(hours, forecastTz || undefined, washOkNow);
+        const shortsOkNow = coat.cls === "ok";
+        const nextShorts = nextShortsVerdictBlock(hours, forecastTz || undefined, shortsOkNow);
+        const nightWalk = nightWalkVerdictBlock(hours, forecastTz || undefined);
+        const calmWind = calmWindDayVerdict(hours, forecastTz || undefined);
+
+        byId("locationLine").innerHTML =
+          "<strong>" +
+          (label || "Selected place") +
+          "</strong> · Clock times " +
+          (forecastTz ? "for " + forecastTz.replace(/_/g, " ") : "local to you");
+        applyVerdict(byId("washVerdict"), byId("washDetail"), wash);
+        renderHourly(byId("washHourly"), wash.slice, forecastTz || undefined);
+        applyVerdict(byId("coatVerdict"), byId("coatDetail"), coat);
+        applyVerdict(byId("brollyVerdict"), byId("brollyDetail"), brolly);
+        applyVerdict(byId("nextDryVerdict"), byId("nextDryDetail"), nextDry);
+        applyVerdict(byId("nextShortsVerdictEl"), byId("nextShortsDetail"), nextShorts);
+        applyVerdict(byId("nightWalkVerdictEl"), byId("nightWalkDetail"), nightWalk);
+        applyVerdict(byId("calmWindVerdictEl"), byId("calmWindDetail"), calmWind);
+        showDefaultSectionCards();
+        byId("results").hidden = false;
+      } catch (e) {
+        console.error(e);
+        showError(e.message || "Something went wrong.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    byId("btnSearch").addEventListener("click", async () => {
+      const q = byId("place").value;
+      if (!q.trim()) {
+        showError("Enter a place name or postcode.");
+        return;
+      }
+      showError("");
+      setLoading(true);
+      try {
+        const { lat, lon, label } = await geocode(q);
+        await loadForLatLon(lat, lon, label);
+      } catch (e) {
+        showError(e.message || "Search failed.");
+        setLoading(false);
+      }
+    });
+
+    let suggestTimer = 0;
+    const placeInput = byId("place");
+    const suggestPanel = byId("suggestions");
+
+    suggestPanel.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+    });
+
+    placeInput.addEventListener("input", () => {
+      clearTimeout(suggestTimer);
+      const q = placeInput.value.trim();
+      if (q.length < 2) {
+        hideSuggestions();
+        return;
+      }
+      suggestTimer = setTimeout(async () => {
+        const raw = placeInput.value;
+        const t = raw.trim();
+        const om = await fetchGeocodeSuggestions(raw);
+        let pcList = [];
+        if (isUkPostcodeStyleQuery(t)) {
+          pcList = await fetchUkPostcodeAutocomplete(t);
+        }
+        renderSuggestionList(om, pcList);
+      }, 260);
+    });
+
+    placeInput.addEventListener("blur", () => {
+      setTimeout(() => hideSuggestions(), 180);
+    });
+
+    placeInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        if (!suggestPanel.hidden && suggestPanel.querySelector(".suggest-item")) {
+          e.preventDefault();
+          suggestPanel.querySelector(".suggest-item").click();
+          return;
+        }
+        byId("btnSearch").click();
+      }
+      if (e.key === "Escape") hideSuggestions();
+    });
+
+    document.querySelector(".quick-locs").addEventListener("click", async (e) => {
+      const chip = e.target.closest("[data-quick-loc]");
+      if (!chip) return;
+      const query = chip.getAttribute("data-geocode");
+      if (!query) return;
+      showError("");
+      setLoading(true);
+      byId("results").hidden = true;
+      try {
+        const { lat, lon, label } = await geocode(query);
+        placeInput.value = label.split(",")[0] || query;
+        await loadForLatLon(lat, lon, label);
+      } catch (err) {
+        showError(err.message || "Could not load that place.");
+        setLoading(false);
+      }
+    });
+
+    byId("btnGeo").addEventListener("click", () => {
+      showError("");
+      if (!navigator.geolocation) {
+        showError("Your browser does not support location.");
+        return;
+      }
+      setLoading(true);
+      byId("results").hidden = true;
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const lat = pos.coords.latitude;
+          const lon = pos.coords.longitude;
+          const label =
+            "Your location (" +
+            lat.toFixed(2) +
+            "°, " +
+            lon.toFixed(2) +
+            "°)";
+          await loadForLatLon(lat, lon, label);
+        },
+        (err) => {
+          setLoading(false);
+          showError(
+            err.code === 1
+              ? "Location permission denied. Try searching for a place instead."
+              : "Could not get your location. Try searching."
+          );
+        },
+        { enableHighAccuracy: false, timeout: 12000, maximumAge: 600000 }
+      );
+    });
+  </script>
+</body>
+</html>
