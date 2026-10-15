@@ -483,11 +483,11 @@
           <button type="button" class="btn-section-toggle" data-section-card="sectionCardWash" aria-pressed="false" title="Washing line">Washing</button>
           <button type="button" class="btn-section-toggle" data-section-card="sectionCardCoat" aria-pressed="false" title="Coat or shorts">Coat</button>
           <button type="button" class="btn-section-toggle" data-section-card="sectionCardBrolly" aria-pressed="false" title="Umbrella">Brolly</button>
-          <button type="button" class="btn-section-toggle" data-section-card="sectionCardDry" aria-pressed="false" title="Next good drying spell">Drying</button>
           <button type="button" class="btn-section-toggle" data-section-card="sectionCardPlan" aria-pressed="false" title="Best 6-hour drying windows and when to put the wash on">Wash plan</button>
           <button type="button" class="btn-section-toggle" data-section-card="sectionCardShorts" aria-pressed="false" title="Next shorts-friendly spell">Shorts</button>
           <button type="button" class="btn-section-toggle" data-section-card="sectionCardWalk" aria-pressed="false" title="Best evening for a night walk">Walk</button>
           <button type="button" class="btn-section-toggle" data-section-card="sectionCardWind" aria-pressed="false" title="Calmest day for wind">Calm</button>
+          <button type="button" class="btn-section-toggle" data-section-card="sectionCardDry" aria-pressed="false" title="Next 24 hours with no rain">No rain</button>
         </div>
         <button type="button" class="btn btn-secondary btn-compact" id="toggleAllCardsBtn">Show all</button>
       </div>
@@ -507,11 +507,6 @@
           <h2 class="card-heading">Umbrella</h2>
           <p class="verdict" id="brollyVerdict"></p>
           <p class="detail" id="brollyDetail"></p>
-        </div>
-        <div class="card card-wide" id="sectionCardDry" hidden>
-          <h2 class="card-heading">Next good drying spell</h2>
-          <p class="verdict" id="nextDryVerdict"></p>
-          <p class="detail" id="nextDryDetail"></p>
         </div>
         <div class="card card-wide" id="sectionCardPlan" hidden>
           <h2 class="card-heading"><span id="planCardTitle">Best drying windows</span></h2>
@@ -534,6 +529,11 @@
           <p class="verdict" id="calmWindVerdictEl"></p>
           <p class="detail" id="calmWindDetail"></p>
         </div>
+        <div class="card card-wide" id="sectionCardDry" hidden>
+          <h2 class="card-heading"><span id="noRainCardTitle">Next stretch with no rain</span></h2>
+          <p class="verdict" id="nextDryVerdict"></p>
+          <p class="detail" id="nextDryDetail"></p>
+        </div>
       </div>
     </div>
     <div id="loading" class="loading" hidden>Loading forecast…</div>
@@ -542,7 +542,7 @@
       Weather data from <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a>.
       UK postcodes from <a href="https://postcodes.io" target="_blank" rel="noopener">Postcodes.io</a> (OS / ONS data).
       “Wash plan” finds the best 6-hour daylight spells (rain chance 10% or less every hour, no measurable rain, wind under 40 km/h), scores them out of 100 on evaporation power (temperature and humidity), sunshine and breeze, and suggests putting the wash on 5 hours before each one opens. Windows starting less than 5 hours away are skipped, as are hours with no rain-probability data (usually beyond about 10 days).
-      Washing line and “next good drying spell” share one rule; “next shorts-friendly spell” matches the coat card (feels-like above 14 °C). “Best evening for a night walk” uses 21:00–23:00 local hours above 15 °C feels-like; if none qualify, it picks the next-best evening (warmer lows, then lighter wind at 10 m). “Calmest day for wind” picks the calendar day with the lowest average 10 m wind in the outlook (then lowest peak).
+      Washing line and “next 24 hours with no rain” share one rule (0% rain chance every hour and almost no precipitation); “next shorts-friendly spell” matches the coat card (feels-like above 14 °C). “Best evening for a night walk” uses 21:00–23:00 local hours above 15 °C feels-like; if none qualify, it picks the next-best evening (warmer lows, then lighter wind at 10 m). “Calmest day for wind” picks the calendar day with the lowest average 10 m wind in the outlook (then lowest peak).
     </footer>
   </div>
 
@@ -575,16 +575,18 @@
     if (washTitleEl) washTitleEl.textContent = "Washing line (next " + DRY_HOURS + " hours)";
     const planTitleEl = byId("planCardTitle");
     if (planTitleEl) planTitleEl.textContent = "Best " + DRY_WINDOW_HOURS + "-hour drying windows";
+    const noRainTitleEl = byId("noRainCardTitle");
+    if (noRainTitleEl) noRainTitleEl.textContent = "Next " + DRY_HOURS + " hours with no rain";
 
     const SECTION_CARD_IDS = [
       "sectionCardWash",
       "sectionCardCoat",
       "sectionCardBrolly",
-      "sectionCardDry",
       "sectionCardPlan",
       "sectionCardShorts",
       "sectionCardWalk",
       "sectionCardWind",
+      "sectionCardDry",
     ];
 
     function allSectionCardsVisible() {
@@ -1162,11 +1164,11 @@
       if (washOkNow) {
         return {
           cls: "ok",
-          title: "Today — you are already in a dry spell",
+          title: "Now — no rain for the next " + DRY_HOURS + " hours",
           detail:
             "The model keeps 0% hourly rain and almost no precipitation for the next " +
             DRY_HOURS +
-            " hours from now. Good time to use the line.",
+            " hours from now.",
         };
       }
       const found = findFirstDryWindow(hours);
@@ -1186,7 +1188,7 @@
       return {
         cls: "ok",
         title: day,
-        detail: `Next solid window starts about ${clock} (${DRY_HOURS} hours in a row at 0% rain in the model). Aim to hang washing from then.`,
+        detail: `Next no-rain stretch starts about ${clock} (${DRY_HOURS} hours in a row at 0% rain in the model).`,
       };
     }
 
