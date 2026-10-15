@@ -903,7 +903,7 @@
     function isDryWindowSlice(slice) {
       if (slice.length < DRY_HOURS) return false;
       const totalRain = slice.reduce((s, x) => s + x.precipMm, 0);
-      return slice.every((x) => x.pop === 0) && totalRain < 0.05;
+      return slice.every((x) => x.popKnown && x.pop === 0) && totalRain < 0.05;
     }
 
     function findFirstDryWindow(hours) {
@@ -1177,9 +1177,7 @@
           detail:
             "No " +
             DRY_HOURS +
-            "-hour stretch of completely dry hours shows up in the next " +
-            USER_FORECAST_DAYS +
-            " days. The outlook may improve as forecasts update.",
+            "-hour stretch of completely dry hours shows up in this forecast (rain probability is only published for roughly the next 10 days). The outlook may improve as forecasts update.",
         };
       }
       const start = found.slice[0].time;
